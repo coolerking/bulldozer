@@ -452,6 +452,15 @@ def drive(cfg, model_path=None, use_joystick=False, model_type=None,
                   'pilot/angle', 'pilot/throttle'],
           outputs=['steering', 'throttle'])
 
+    #
+    # Emergency stop system
+    #
+    if cfg.HAVE_EMERGENCY_STOP:
+        emergency_stop = EmergencyStop(cfg)
+        V.add(emergency_stop,
+              inputs=['throttle', 'steering'],
+              outputs=['emergency_active', 'throttle', 'steering'])
+
 
     if (cfg.CONTROLLER_TYPE != "pigpio_rc") and (cfg.CONTROLLER_TYPE != "MM1"):
         if isinstance(ctr, JoystickController):
@@ -1130,6 +1139,234 @@ def add_drivetrain(V, cfg):
                           cfg.VESC_STEERING_OFFSET
                         )
             V.add(vesc, inputs=['steering', 'throttle'])
+
+        elif cfg.DRIVE_TRAIN_TYPE == "GPIO_MOTORS":
+            #
+            # GPIO motor control for bulldozer using gpiozero
+            # Controls two motors (left and right tracks) with PWM speed control
+            #
+            left_motor = BulldozerMotorController(cfg.BULLDOZER_MOTORS, 'left')
+            right_motor = BulldozerMotorController(cfg.BULLDOZER_MOTORS, 'right')
+
+            V.add(left_motor, inputs=['left/throttle'])
+            V.add(right_motor, inputs=['right/throttle'])
+
+
+class EmergencyStop:
+    """
+    Emergency stop system that monitors a GPIO pin for emergency stop button press.
+    Immediately stops all motors when triggered and provides reset mechanism.
+    """
+    
+    def __init__(self, config):
+        """
+        Initialize emergency stop system
+        
+        :param config: Configuration dictionary containing emergency stop parameters
+        """
+        self.config = config
+        self.emergency_pin = getattr(config, 'EMERGENCY_STOP_PIN', 26)
+        self.debounce_time = getattr(config, 'EMERGENCY_DEBOUNCE_TIME', 0.1)
+        self.pull_up = getattr(config, 'EMERGENCY_PULLUP', True)
+        self.reset_pin = getattr(config, 'EMERGENCY_RESET_PIN', None)
+        
+        # Emergency stop state
+        self.is_triggered = False
+        self.last_trigger_time = 0
+        
+        # GPIO handling
+        self.gpio_available = False
+        self.GPIO = None
+        
+        try:
+            import RPi.GPIO as GPIO
+            self.GPIO = GPIO
+            self.gpio_available = True
+            
+            # Setup GPIO
+            GPIO.setmode(GPIO.BCM)
+            
+            # Setup emergency stop pin
+            if self.pull_up:
+                GPIO.setup(self.emergency_pin, GPIO.IN, pull_up_down=GPIO.PUD_UP)
+            else:
+                GPIO.setup(self.emergency_pin, GPIO.IN)
+            
+            # Setup reset pin if provided
+            if self.reset_pin:
+                GPIO.setup(self.reset_pin, GPIO.IN, pull_up_down=GPIO.PUD_UP)
+            
+            logger.info(f"Emergency stop initialized: pin={self.emergency_pin}, pull_up={self.pull_up}")
+            
+        except ImportError:
+            logger.warning("RPi.GPIO library not found. Emergency stop will be simulated.")
+            self.gpio_available = False
+        except Exception as e:
+            logger.error(f"Failed to initialize emergency stop GPIO: {e}")
+            self.gpio_available = False
+    
+    def run(self, throttle, steering):
+        """
+        Check emergency stop state and return appropriate control values
+        
+        :param throttle: Input throttle value (-1.0 to 1.0)
+        :param steering: Input steering value (-1.0 to 1.0)  
+        :return: tuple of (emergency_active, throttle, steering) where emergency_active is True if triggered
+        """
+        import time
+        
+        try:
+            if self.gpio_available and self.GPIO:
+                # Check emergency stop button
+                current_state = self.GPIO.input(self.emergency_pin)
+                
+                # For pull-up configuration, button press = LOW
+                # For pull-down configuration, button press = HIGH
+                button_pressed = (current_state == 0) if self.pull_up else (current_state == 1)
+                
+                if button_pressed:
+                    current_time = time.time()
+                    if current_time - self.last_trigger_time > self.debounce_time:
+                        self.is_triggered = True
+                        self.last_trigger_time = current_time
+                        logger.error("EMERGENCY STOP TRIGGERED!")
+                
+                # Check reset button if configured
+                if self.reset_pin and self.is_triggered:
+                    reset_state = self.GPIO.input(self.reset_pin)
+                    # Reset when reset button is pressed (active low with pull-up)
+                    if reset_state == 0:
+                        self.is_triggered = False
+                        logger.info("Emergency stop reset")
+            
+            # Return emergency state and zeroed controls if triggered
+            if self.is_triggered:
+                return True, 0.0, 0.0
+            else:
+                return False, throttle, steering
+                
+        except Exception as e:
+            logger.error(f"Error in emergency stop: {e}")
+            return False, throttle, steering
+    
+    def get_status(self):
+        """Return current emergency stop status"""
+        return {"emergency_triggered": self.is_triggered}
+    
+    def shutdown(self):
+        """Clean up GPIO resources"""
+        try:
+            if self.gpio_available and self.GPIO:
+                self.GPIO.cleanup()
+                logger.info("Emergency stop GPIO cleanup completed")
+        except:
+            pass
+
+
+class BulldozerMotorController:
+    """
+    Motor controller for bulldozer tracks using gpiozero library.
+    Controls individual motor with forward, backward, and PWM speed control.
+    """
+    
+    def __init__(self, motor_config, motor_side):
+        """
+        Initialize motor controller with configuration
+        
+        :param motor_config: Configuration dictionary containing pin assignments
+        :param motor_side: 'left' or 'right' to specify which motor to control
+        """
+        try:
+            from gpiozero import Motor, PWMOutputDevice
+            import RPi.GPIO as GPIO
+            
+            # Validate motor side
+            if motor_side not in ['left', 'right']:
+                raise ValueError("motor_side must be 'left' or 'right'")
+            
+            self.motor_side = motor_side
+            self.config = motor_config
+            
+            # Get pin assignments based on motor side
+            if motor_side == 'left':
+                forward_pin = motor_config['LEFT_MOTOR_FORWARD_PIN']
+                backward_pin = motor_config['LEFT_MOTOR_BACKWARD_PIN']
+                enable_pin = motor_config['LEFT_MOTOR_ENABLE_PIN']
+            else:  # right motor
+                forward_pin = motor_config['RIGHT_MOTOR_FORWARD_PIN']
+                backward_pin = motor_config['RIGHT_MOTOR_BACKWARD_PIN']
+                enable_pin = motor_config['RIGHT_MOTOR_ENABLE_PIN']
+            
+            # Create motor instance
+            self.motor = Motor(forward=forward_pin, backward=backward_pin)
+            
+            # Create PWM output for speed control
+            self.speed_pwm = PWMOutputDevice(enable_pin, frequency=motor_config['PWM_FREQUENCY'])
+            
+            # Configuration values
+            self.stop_pwm = motor_config['STOP_PWM']
+            self.max_pwm = motor_config['MAX_PWM']
+            
+            # Initialize motor to stop state
+            self.motor.stop()
+            self.speed_pwm.value = self.stop_pwm
+            
+            logger.info(f"Initialized {motor_side} motor controller: "
+                       f"forward_pin={forward_pin}, backward_pin={backward_pin}, "
+                       f"enable_pin={enable_pin}")
+            
+        except ImportError:
+            logger.error("gpiozero library not found. Please install with: pip install gpiozero")
+            raise
+        except Exception as e:
+            logger.error(f"Failed to initialize {motor_side} motor controller: {e}")
+            raise
+    
+    def run(self, throttle):
+        """
+        Control motor based on throttle value
+        
+        :param throttle: Float value between -1.0 (full reverse) and 1.0 (full forward)
+        :return: throttle value (passthrough for pipeline)
+        """
+        try:
+            # Clamp throttle value to valid range
+            throttle = max(-1.0, min(1.0, throttle))
+            
+            # Calculate PWM value based on throttle
+            if abs(throttle) < 0.05:  # Dead zone
+                self.motor.stop()
+                self.speed_pwm.value = self.stop_pwm
+            elif throttle > 0:
+                # Forward motion
+                pwm_value = abs(throttle) * self.max_pwm
+                self.speed_pwm.value = pwm_value
+                self.motor.forward()
+            else:
+                # Reverse motion
+                pwm_value = abs(throttle) * self.max_pwm
+                self.speed_pwm.value = pwm_value
+                self.motor.backward()
+            
+            return throttle
+            
+        except Exception as e:
+            logger.error(f"Error controlling {self.motor_side} motor: {e}")
+            # Ensure motor stops on error
+            self.motor.stop()
+            self.speed_pwm.value = self.stop_pwm
+            return 0.0
+    
+    def shutdown(self):
+        """Clean shutdown - stop motor and cleanup GPIO"""
+        try:
+            self.motor.stop()
+            self.speed_pwm.value = self.stop_pwm
+            self.motor.close()
+            self.speed_pwm.close()
+            logger.info(f"{self.motor_side} motor controller shutdown")
+        except Exception as e:
+            logger.error(f"Error during {self.motor_side} motor shutdown: {e}")
 
 
 if __name__ == '__main__':

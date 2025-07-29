@@ -8,11 +8,11 @@
 # The update operation will not touch this file.
 # """
 
-# import os
-# 
-# #PATHS
-# CAR_PATH = PACKAGE_PATH = os.path.dirname(os.path.realpath(__file__))
-# DATA_PATH = os.path.join(CAR_PATH, 'data')
+import os
+
+#PATHS
+CAR_PATH = PACKAGE_PATH = os.path.dirname(os.path.realpath(__file__))
+DATA_PATH = os.path.join(CAR_PATH, 'data')
 # MODELS_PATH = os.path.join(CAR_PATH, 'models')
 # 
 # #VEHICLE
@@ -763,20 +763,20 @@
 
 # BULLDOZER SPECIFIC CONFIGURATION (UNCOMMENT TO USE)
 # GPIO pin configuration for bulldozer motor control using gpiozero
-# BULLDOZER_DRIVE_TRAIN_TYPE = "GPIO_MOTORS"  # Custom drive train type for bulldozer
+DRIVE_TRAIN_TYPE = "GPIO_MOTORS"  # Custom drive train type for bulldozer
 
 # Motor configuration for 2-motor setup (left and right tracks)
-# BULLDOZER_MOTORS = {
-#     "LEFT_MOTOR_FORWARD_PIN": 17,      # GPIO pin for left motor forward
-#     "LEFT_MOTOR_BACKWARD_PIN": 27,     # GPIO pin for left motor backward
-#     "LEFT_MOTOR_ENABLE_PIN": 22,       # GPIO pin for left motor PWM speed control
-#     "RIGHT_MOTOR_FORWARD_PIN": 23,     # GPIO pin for right motor forward
-#     "RIGHT_MOTOR_BACKWARD_PIN": 24,    # GPIO pin for right motor backward
-#     "RIGHT_MOTOR_ENABLE_PIN": 25,      # GPIO pin for right motor PWM speed control
-#     "PWM_FREQUENCY": 1000,             # PWM frequency for motor speed control
-#     "STOP_PWM": 0,                     # PWM value for motor stop
-#     "MAX_PWM": 1.0,                    # PWM value for max speed
-# }
+BULLDOZER_MOTORS = {
+    "LEFT_MOTOR_FORWARD_PIN": 17,      # GPIO pin for left motor forward
+    "LEFT_MOTOR_BACKWARD_PIN": 27,     # GPIO pin for left motor backward
+    "LEFT_MOTOR_ENABLE_PIN": 22,       # GPIO pin for left motor PWM speed control
+    "RIGHT_MOTOR_FORWARD_PIN": 23,     # GPIO pin for right motor forward
+    "RIGHT_MOTOR_BACKWARD_PIN": 24,    # GPIO pin for right motor backward
+    "RIGHT_MOTOR_ENABLE_PIN": 25,      # GPIO pin for right motor PWM speed control
+    "PWM_FREQUENCY": 1000,             # PWM frequency for motor speed control
+    "STOP_PWM": 0,                     # PWM value for motor stop
+    "MAX_PWM": 1.0,                    # PWM value for max speed
+}
 
 # Nintendo Switch Bluetooth Controller Configuration
 # SWITCH_CONTROLLER_CONFIG = {
@@ -788,9 +788,25 @@
 # }
 
 # Bulldozer-specific control parameters
-# BULLDOZER_CONTROL = {
-#     "MIN_THROTTLE": 0.3,               # Minimum throttle for bulldozer movement
-#     "TURN_SENSITIVITY": 0.8,           # Steering sensitivity for track differential control
-#     "BRAKE_ON_ZERO_THROTTLE": True,    # Apply brake when throttle is zero
-#     "ENABLE_SOFT_START": True,         # Gradual acceleration to prevent motor strain
+BULLDOZER_CONTROL = {
+    "MIN_THROTTLE": 0.3,               # Minimum throttle for bulldozer movement
+    "TURN_SENSITIVITY": 0.8,           # Steering sensitivity for track differential control
+    "BRAKE_ON_ZERO_THROTTLE": True,    # Apply brake when throttle is zero
+    "ENABLE_SOFT_START": True,         # Gradual acceleration to prevent motor strain
+}
+
+# EMERGENCY STOP CONFIGURATION
+# Uncomment and configure these settings to enable emergency stop functionality
+# HAVE_EMERGENCY_STOP = True                    # Enable emergency stop system
+# EMERGENCY_STOP_PIN = 26                       # GPIO pin for emergency stop button (BCM numbering)
+# EMERGENCY_PULLUP = True                       # Use internal pull-up resistor for emergency stop pin
+# EMERGENCY_DEBOUNCE_TIME = 0.1                 # Debounce time in seconds for emergency stop button
+# EMERGENCY_RESET_PIN = 19                      # Optional GPIO pin for reset button (set to None to disable)
+
+# Emergency stop configuration for bulldozer
+# BULLDOZER_EMERGENCY_STOP = {
+#     "EMERGENCY_STOP_PIN": 26,                  # GPIO pin for emergency stop button
+#     "EMERGENCY_PULLUP": True,                  # Use internal pull-up resistor
+#     "EMERGENCY_DEBOUNCE_TIME": 0.1,            # Debounce time in seconds
+#     "EMERGENCY_RESET_PIN": 19,                 # Optional reset button pin
 # }

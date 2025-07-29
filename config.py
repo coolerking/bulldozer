@@ -64,6 +64,7 @@ SSD1306_RESOLUTION = 1 # 1 = 128x32; 2 = 128x64
 # "DC_STEER_THROTTLE" uses HBridge pwm to control one steering dc motor, and one drive wheel motor
 # "DC_TWO_WHEEL" uses HBridge in 2-pin mode to control two drive motors, one on the left, and one on the right.
 # "DC_TWO_WHEEL_L298N" using HBridge in 3-pin mode to control two drive motors, one of the left and one on the right.
+# "GPIO_MOTORS" uses gpiozero to control two motors (left and right tracks) with GPIO pins for bulldozer configuration
 # "MOCK" no drive train.  This can be used to test other features in a test rig.
 # "VESC" VESC Motor controller to set servo angle and duty cycle
 # (deprecated) "SERVO_HBRIDGE_PWM" use ServoBlaster to output pwm control from the PiZero directly to control steering,
